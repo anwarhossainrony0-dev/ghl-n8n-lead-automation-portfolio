@@ -1,0 +1,100 @@
+{
+  "name": "GHL v2 - Error Alert",
+  "nodes": [
+    {
+      "id": "0c9d393b-833c-4bd5-a60c-f900b4d1dc46",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "b6a75db9-9e82-4bca-ac25-a29d71820a4a",
+      "name": "Format Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Format the Error Trigger payload as a Telegram HTML message.\nconst d = $input.first().json || {};\nconst exec = d.execution || {};\nconst trig = d.trigger || {};\nconst wf = d.workflow || {};\nconst err = exec.error || trig.error || {};\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nlet message = err.message || err.description || 'Unknown error';\nif (message.length > 1500) message = message.slice(0, 1497) + '...';\nconst failedNode = exec.lastNodeExecuted || (err.node && err.node.name) || (trig.error && trig.error.node && trig.error.node.name) || '—';\n\nconst lines = [\n  '🚨 <b>n8n workflow failed</b>',\n  '',\n  `⚙️ <b>Workflow:</b> ${esc(wf.name || wf.id || '—')}`,\n  `🧩 <b>Failed node:</b> ${esc(failedNode)}`,\n  `❌ <b>Error:</b> <code>${esc(message)}</code>`,\n  `🕒 <b>Mode:</b> ${esc(exec.mode || trig.mode || '—')}`,\n];\nif (exec.url) lines.push(`🔗 <a href=\"${esc(exec.url)}\">Open execution ${esc(exec.id || '')}</a>`);\nelse if (exec.id) lines.push(`🆔 Execution: <code>${esc(exec.id)}</code>`);\nelse lines.push('(Error happened in the trigger, so there is no execution to open.)');\n\nreturn [{ json: { text: lines.join('\\n') } }];\n"
+      }
+    },
+    {
+      "id": "8f1f207b-ce40-4b83-a070-dfef6bfc4dc7",
+      "name": "Telegram Error Alert",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        440,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "telegramApi": {
+          "id": "__TELEGRAM_CRED_ID__",
+          "name": "__TELEGRAM_CRED_NAME__"
+        }
+      },
+      "parameters": {
+        "chatId": "__TELEGRAM_CHAT_ID__",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "273698ee-56fa-461d-a74e-3861ee66226f",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "width": 640,
+        "height": 220,
+        "content": "## GHL v2 - Error Alert\nFires when a workflow that uses this as its **Error workflow** fails.\n\nIn **GHL Lead Automation v2** (and the digest) open ⋯ → Settings → Error workflow → pick this one.\nDoes not need to be activated. Set the Telegram credential and `__TELEGRAM_CHAT_ID__`."
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Format Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Error": {
+      "main": [
+        [
+          {
+            "node": "Telegram Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
