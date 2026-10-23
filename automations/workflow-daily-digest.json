@@ -1,0 +1,154 @@
+{
+  "name": "GHL v2 - Daily Lead Digest",
+  "nodes": [
+    {
+      "id": "84194061-388e-4e6c-a17f-256371eb3918",
+      "name": "Every Day 9:00 (Dhaka)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 9,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c0219e66-4148-4d6a-a7ee-2436b5f9f73c",
+      "name": "Read Leads_v2",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        220,
+        300
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "__GOOGLE_CRED_ID__",
+          "name": "__GOOGLE_CRED_NAME__"
+        }
+      },
+      "parameters": {
+        "authentication": "serviceAccount",
+        "documentId": {
+          "__rl": true,
+          "value": "__SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads_v2",
+          "mode": "name"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "faa7714b-a317-4ed4-a7aa-18edd44ec873",
+      "name": "Build Digest",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// Build one Telegram digest of leads whose last_seen is within the last 24 hours.\nconst HOURS = 24;\nconst MAX_LIST = 25; // per tier, keeps the message under Telegram's 4096-char limit\nconst cutoff = Date.now() - HOURS * 60 * 60 * 1000;\nconst esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst rows = $input.all()\n  .map((i) => i.json || {})\n  .filter((r) => String(r.contact_id ?? '').trim() !== '')\n  .filter((r) => {\n    const t = new Date(String(r.last_seen ?? '').trim()).getTime();\n    return !isNaN(t) && t >= cutoff;\n  });\n\nconst byTier = { hot: [], warm: [], cold: [] };\nfor (const r of rows) {\n  const tier = String(r.tier || '').toLowerCase();\n  (byTier[tier] || byTier.cold).push(r);\n}\n\nconst today = new Date().toLocaleDateString('en-GB', { timeZone: 'Asia/Dhaka', day: 'numeric', month: 'short', year: 'numeric' });\nlet text;\nif (!rows.length) {\n  text = `📭 <b>Daily lead digest</b> — ${esc(today)}\\nNo new leads in the last ${HOURS}h.`;\n} else {\n  const line = (r) => {\n    const name = [r.first_name, r.last_name].filter(Boolean).join(' ') || r.email || r.phone || r.contact_id;\n    const contact = r.phone || r.email || '';\n    const repeat = Number(r.submission_count) > 1 ? ` 🔁${Number(r.submission_count)}` : '';\n    return `• ${esc(name)} (${esc(r.score)})${contact ? ' — ' + esc(contact) : ''}${repeat}`;\n  };\n  const section = (title, list) => {\n    if (!list.length) return [];\n    const shown = list.sort((x, y) => Number(y.score) - Number(x.score)).slice(0, MAX_LIST).map(line);\n    if (list.length > MAX_LIST) shown.push(`…and ${list.length - MAX_LIST} more`);\n    return ['', `<b>${title}</b>`, ...shown];\n  };\n  text = [\n    `📊 <b>Daily lead digest</b> — ${esc(today)} (last ${HOURS}h)`,\n    `Total: <b>${rows.length}</b> | 🔥 Hot: <b>${byTier.hot.length}</b> | 🌤 Warm: <b>${byTier.warm.length}</b> | ❄️ Cold: <b>${byTier.cold.length}</b>`,\n    byTier.hot.length ? '(Hot leads were alerted instantly.)' : '',\n    ...section('🌤 Warm', byTier.warm),\n    ...section('❄️ Cold', byTier.cold),\n  ].filter((l, i) => l !== '' || i > 2).join('\\n');\n  if (text.length > 4000) text = text.slice(0, 3990) + '\\n…';\n}\n\nreturn [{ json: { text, total: rows.length, hot: byTier.hot.length, warm: byTier.warm.length, cold: byTier.cold.length } }];\n"
+      }
+    },
+    {
+      "id": "d9238b1a-a236-4c93-a838-44c75a3ecf9b",
+      "name": "Telegram Digest",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        660,
+        300
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "telegramApi": {
+          "id": "__TELEGRAM_CRED_ID__",
+          "name": "__TELEGRAM_CRED_NAME__"
+        }
+      },
+      "parameters": {
+        "chatId": "__TELEGRAM_CHAT_ID__",
+        "text": "={{ $json.text }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "disable_web_page_preview": true,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "id": "e72915a2-a825-4423-ad27-c681c45921d9",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "width": 700,
+        "height": 240,
+        "content": "## GHL v2 - Daily Lead Digest\nRuns every day at **09:00 Asia/Dhaka** (timezone is set in workflow Settings).\n\nReads `Leads_v2`, keeps rows whose `last_seen` is within 24h, sends one Telegram message (counts per tier + warm/cold list) or a short \"no new leads\" note.\n\nSet the Google + Telegram credentials, replace `__SHEET_ID__` and `__TELEGRAM_CHAT_ID__`, then activate."
+      }
+    }
+  ],
+  "connections": {
+    "Every Day 9:00 (Dhaka)": {
+      "main": [
+        [
+          {
+            "node": "Read Leads_v2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Leads_v2": {
+      "main": [
+        [
+          {
+            "node": "Build Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Digest": {
+      "main": [
+        [
+          {
+            "node": "Telegram Digest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Dhaka"
+  },
+  "tags": []
+}
