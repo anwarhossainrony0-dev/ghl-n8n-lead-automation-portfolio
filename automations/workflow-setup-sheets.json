@@ -1,0 +1,251 @@
+{
+  "name": "GHL v2 - Setup Sheets",
+  "nodes": [
+    {
+      "id": "03ac812e-4ca5-43b6-a9d1-5b74b8352379",
+      "name": "Run Once",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "754e067c-d952-4d56-afba-f49a1f0f035d",
+      "name": "Tabs to Create",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "jsCode": "return [{ json: { title: 'Leads_v2' } }, { json: { title: 'Rejected' } }];\n"
+      }
+    },
+    {
+      "id": "ccecc574-0e16-4d60-a4b8-4079033d4a38",
+      "name": "Create Missing Tabs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        440,
+        300
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleApi": {
+          "id": "__GOOGLE_CRED_ID__",
+          "name": "__GOOGLE_CRED_NAME__"
+        }
+      },
+      "parameters": {
+        "authentication": "serviceAccount",
+        "resource": "sheet",
+        "operation": "create",
+        "documentId": {
+          "__rl": true,
+          "value": "__SHEET_ID__",
+          "mode": "id"
+        },
+        "title": "={{ $json.title }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "543de88c-a3c5-4937-a9c2-e0db212de23f",
+      "name": "Leads_v2 Header",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// One item whose keys are the header names. On an empty tab the Google Sheets node writes these\n// keys as row 1 (the empty values leave row 2 blank). On a tab that already has them, nothing visible changes.\nconst HEADERS = [\"contact_id\",\"first_seen\",\"last_seen\",\"submission_count\",\"first_name\",\"last_name\",\"email\",\"phone\",\"property_address\",\"help_topic\",\"message\",\"website\",\"source\",\"session_source\",\"utm_source\",\"utm_medium\",\"utm_campaign\",\"country\",\"score\",\"tier\",\"score_reasons\",\"ghl_sync\",\"ghl_opportunity_id\",\"location_name\"];\nreturn [{ json: Object.fromEntries(HEADERS.map((h) => [h, ''])) }];\n"
+      }
+    },
+    {
+      "id": "66ed8efe-a98d-48bb-a440-3f53797a0a2d",
+      "name": "Write Leads_v2 Headers",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        880,
+        300
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "__GOOGLE_CRED_ID__",
+          "name": "__GOOGLE_CRED_NAME__"
+        }
+      },
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads_v2",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      }
+    },
+    {
+      "id": "1b0feefe-757d-4f38-af77-eb1333dc8059",
+      "name": "Rejected Header",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// One item whose keys are the header names. On an empty tab the Google Sheets node writes these\n// keys as row 1 (the empty values leave row 2 blank). On a tab that already has them, nothing visible changes.\nconst HEADERS = [\"received_at\",\"reason\",\"contact_id\",\"name\",\"email\",\"phone\",\"source\",\"raw_json\"];\nreturn [{ json: Object.fromEntries(HEADERS.map((h) => [h, ''])) }];\n"
+      }
+    },
+    {
+      "id": "897335b2-2a25-4fbd-a647-7c735fe3752c",
+      "name": "Write Rejected Headers",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [
+        1320,
+        300
+      ],
+      "credentials": {
+        "googleApi": {
+          "id": "__GOOGLE_CRED_ID__",
+          "name": "__GOOGLE_CRED_NAME__"
+        }
+      },
+      "parameters": {
+        "authentication": "serviceAccount",
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "__SHEET_ID__",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Rejected",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "autoMapInputData",
+          "value": {},
+          "matchingColumns": [],
+          "schema": []
+        },
+        "options": {
+          "cellFormat": "RAW"
+        }
+      }
+    },
+    {
+      "id": "23034aaa-33ab-44af-a558-8fb6a4c2da66",
+      "name": "Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "width": 760,
+        "height": 240,
+        "content": "## GHL v2 - Setup Sheets (run once)\nCreates the tabs `Leads_v2` and `Rejected` if they are missing (existing tabs are skipped) and writes their header rows.\n\nSet the Google credential on the 3 Sheets nodes, replace `__SHEET_ID__`, then click **Execute workflow**.\nAfterwards format column `phone` (H) in `Leads_v2` and F in `Rejected` as Plain text."
+      }
+    }
+  ],
+  "connections": {
+    "Run Once": {
+      "main": [
+        [
+          {
+            "node": "Tabs to Create",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Tabs to Create": {
+      "main": [
+        [
+          {
+            "node": "Create Missing Tabs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Missing Tabs": {
+      "main": [
+        [
+          {
+            "node": "Leads_v2 Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Leads_v2 Header": {
+      "main": [
+        [
+          {
+            "node": "Write Leads_v2 Headers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write Leads_v2 Headers": {
+      "main": [
+        [
+          {
+            "node": "Rejected Header",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rejected Header": {
+      "main": [
+        [
+          {
+            "node": "Write Rejected Headers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": []
+}
